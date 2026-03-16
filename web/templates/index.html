@@ -35,6 +35,11 @@
             margin-bottom: 10px;
         }
 
+        .subtitle {
+            color: #b3b3b3;
+            font-size: 1.1rem;
+        }
+
         .search-box {
             display: flex;
             gap: 10px;
@@ -49,6 +54,11 @@
             border-radius: 30px;
             font-size: 16px;
             outline: none;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        input:focus {
+            box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.5);
         }
 
         button {
@@ -59,19 +69,43 @@
             color: white;
             font-size: 16px;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.2s;
+            font-weight: bold;
         }
 
         button:hover {
             transform: scale(1.05);
+            background: #1ed760;
+        }
+
+        button:disabled {
+            background: #535353;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .player {
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.6);
             border-radius: 20px;
             padding: 30px;
             margin-top: 30px;
             text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .album-art {
+            width: 250px;
+            height: 250px;
+            margin: 0 auto 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .album-art img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .current-track {
@@ -79,24 +113,91 @@
         }
 
         .track-name {
-            font-size: 1.5rem;
-            margin-bottom: 5px;
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            font-weight: bold;
         }
 
         .artist-name {
             color: #b3b3b3;
+            font-size: 1.1rem;
+        }
+
+        .album-name {
+            color: #535353;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+            padding: 0 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #535353;
+            border-radius: 3px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .progress {
+            height: 100%;
+            background: #1DB954;
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            color: #b3b3b3;
+            font-size: 0.85rem;
         }
 
         .controls {
             display: flex;
             justify-content: center;
-            gap: 20px;
+            align-items: center;
+            gap: 15px;
             margin-top: 20px;
         }
 
         .controls button {
             background: #535353;
-            padding: 10px 20px;
+            padding: 12px 18px;
+            border-radius: 50%;
+        }
+
+        .controls button.play-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            font-size: 24px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controls button.play-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+
+        .volume-control input {
+            width: 100px;
+            padding: 5px;
         }
 
         .playlist {
@@ -108,12 +209,25 @@
 
         .playlist h2 {
             margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .playlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .track-count {
+            color: #b3b3b3;
+            font-size: 0.9rem;
         }
 
         .track-item {
             display: flex;
             align-items: center;
-            padding: 10px;
+            padding: 12px;
             border-radius: 10px;
             cursor: pointer;
             transition: background 0.2s;
@@ -125,6 +239,16 @@
 
         .track-item.playing {
             background: rgba(29, 185, 84, 0.3);
+        }
+
+        .track-number {
+            width: 30px;
+            color: #b3b3b3;
+            font-size: 0.9rem;
+        }
+
+        .track-item.playing .track-number {
+            color: #1DB954;
         }
 
         .track-item img {
@@ -139,12 +263,71 @@
             text-align: left;
         }
 
+        .track-info .name {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .track-info .artist {
+            color: #b3b3b3;
+            font-size: 0.9rem;
+        }
+
+        .track-duration {
+            color: #b3b3b3;
+            font-size: 0.9rem;
+        }
+
         .results {
             margin-top: 30px;
         }
 
         .results h2 {
             margin-bottom: 15px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid red;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #ff6b6b;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .tab.active {
+            background: #1DB954;
         }
     </style>
 </head>
@@ -153,13 +336,15 @@
     <div class="container">
         <header>
             <h1>🎧 Spotify Radio</h1>
-            <p>Поиск и потоковая трансляция музыки</p>
+            <p class="subtitle">Поиск и потоковая трансляция музыки</p>
         </header>
 
         <div class="search-box">
             <input type="text" id="searchInput" placeholder="Поиск трека, исполнителя или альбома...">
-            <button onclick="search()">Поиск</button>
+            <button onclick="search()" id="searchBtn">Поиск</button>
         </div>
+
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
 
         <div class="results" id="results" style="display: none;">
             <h2>Результаты поиска</h2>
@@ -167,18 +352,45 @@
         </div>
 
         <div class="player" id="player" style="display: none;">
+            <div class="album-art" id="albumArt">
+                <img src="https://via.placeholder.com/250x250/191414/1DB954?text=♪" alt="Album">
+            </div>
             <div class="current-track">
                 <div class="track-name" id="trackName"></div>
                 <div class="artist-name" id="artistName"></div>
+                <div class="album-name" id="albumName"></div>
             </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" onclick="seek(event)">
+                    <div class="progress" id="progress"></div>
+                </div>
+                <div class="time-display">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalTime">0:00</span>
+                </div>
+            </div>
+
             <div class="controls">
                 <button onclick="prevTrack()">⏮</button>
-                <button onclick="togglePlay()" id="playBtn">▶</button>
+                <button class="play-btn" onclick="togglePlay()" id="playBtn">▶</button>
                 <button onclick="nextTrack()">⏭</button>
-                <button onclick="startRadio()">📻 Радио</button>
             </div>
+
+            <div class="volume-control">
+                <span>🔈</span>
+                <input type="range" min="0" max="100" value="100" onchange="setVolume(this.value)">
+            </div>
+
+            <div style="margin-top: 15px;">
+                <button onclick="startRadio()" id="radioBtn">📻 Создать радио</button>
+            </div>
+
             <div class="playlist" id="playlistSection" style="display: none;">
-                <h2>Плейлист</h2>
+                <div class="playlist-header">
+                    <h2>Плейлист</h2>
+                    <span class="track-count" id="trackCount"></span>
+                </div>
                 <div id="playlist"></div>
             </div>
         </div>
@@ -188,18 +400,69 @@
         let currentState = {
             isPlaying: false,
             currentTrack: null,
-            playlist: []
+            playlist: [],
+            currentIndex: 0,
+            progress: 0,
+            duration: 0
         };
+
+        let audio = new Audio();
+        let progressInterval;
+
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration) {
+                const progress = (audio.currentTime / audio.duration) * 100;
+                document.getElementById('progress').style.width = progress + '%';
+                document.getElementById('currentTime').textContent = formatTime(audio.currentTime);
+                document.getElementById('totalTime').textContent = formatTime(audio.duration);
+            }
+        });
+
+        audio.addEventListener('ended', () => {
+            nextTrack();
+        });
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
 
         async function search() {
             const query = document.getElementById('searchInput').value;
+            const searchBtn = document.getElementById('searchBtn');
+
             if (!query) return;
 
-            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-            const data = await response.json();
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<span class="loading"></span>Поиск...';
 
-            if (data.tracks) {
-                showResults(data.tracks);
+            try {
+                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                if (data.tracks) {
+                    showResults(data.tracks);
+                }
+            } catch (e) {
+                showError('Ошибка при поиске: ' + e.message);
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Поиск';
             }
         }
 
@@ -209,10 +472,10 @@
 
             resultsList.innerHTML = tracks.map((track, index) => `
                 <div class="track-item" onclick="selectTrack('${track.id}')">
-                    <img src="${track.image || 'https://via.placeholder.com/50'}" alt="${track.name}">
+                    <img src="${track.image || 'https://via.placeholder.com/50x50'}" alt="${track.name}">
                     <div class="track-info">
-                        <div>${track.name}</div>
-                        <div class="artist-name">${track.artist}</div>
+                        <div class="name">${track.name}</div>
+                        <div class="artist">${track.artist}</div>
                     </div>
                 </div>
             `).join('');
@@ -221,31 +484,57 @@
         }
 
         async function selectTrack(trackId) {
-            const response = await fetch('/api/play', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ track_id: trackId })
-            });
-            const data = await response.json();
+            try {
+                const response = await fetch('/api/play', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ track_id: trackId })
+                });
+                const data = await response.json();
 
-            if (data.track) {
-                showPlayer(data.track);
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                if (data.track) {
+                    showPlayer(data.track);
+                }
+            } catch (e) {
+                showError('Ошибка при воспроизведении: ' + e.message);
             }
         }
 
         async function startRadio() {
             if (!currentState.currentTrack) return;
 
-            const response = await fetch('/api/radio', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ track_id: currentState.currentTrack.id })
-            });
-            const data = await response.json();
+            const radioBtn = document.getElementById('radioBtn');
+            radioBtn.disabled = true;
+            radioBtn.innerHTML = '<span class="loading"></span>Создание радио...';
 
-            if (data.playlist) {
-                currentState.playlist = data.playlist;
-                showPlaylist(data.playlist);
+            try {
+                const response = await fetch('/api/radio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ track_id: currentState.currentTrack.id })
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                if (data.playlist) {
+                    currentState.playlist = data.playlist;
+                    currentState.currentIndex = 0;
+                    showPlaylist(data.playlist);
+                }
+            } catch (e) {
+                showError('Ошибка при создании радио: ' + e.message);
+            } finally {
+                radioBtn.disabled = false;
+                radioBtn.textContent = '📻 Создать радио';
             }
         }
 
@@ -255,8 +544,23 @@
 
             document.getElementById('trackName').textContent = track.name;
             document.getElementById('artistName').textContent = track.artist;
+            document.getElementById('albumName').textContent = track.album || '';
+
+            const albumArt = document.getElementById('albumArt').querySelector('img');
+            albumArt.src = track.image || 'https://via.placeholder.com/250x250/191414/1DB954?text=♪';
+
+            // Setup audio
+            if (track.preview_url) {
+                audio.src = track.preview_url;
+                audio.play();
+                currentState.isPlaying = true;
+                document.getElementById('playBtn').textContent = '⏸';
+            } else {
+                showError('Превью недоступно, используйте Spotify для полного воспроизведения');
+            }
 
             playerDiv.style.display = 'block';
+            playerDiv.scrollIntoView({ behavior: 'smooth' });
         }
 
         function showPlaylist(playlist) {
@@ -264,38 +568,77 @@
             const playlistSection = document.getElementById('playlistSection');
 
             playlistSection.style.display = 'block';
+            document.getElementById('trackCount').textContent = `${playlist.length} треков`;
 
             playlistDiv.innerHTML = playlist.map((t, i) => `
-                <div class="track-item" onclick="playTrack(${i})">
-                    <img src="${t.image || 'https://via.placeholder.com/50'}" alt="${t.name}">
+                <div class="track-item ${i === currentState.currentIndex ? 'playing' : ''}" onclick="playTrack(${i})">
+                    <span class="track-number">${i + 1}</span>
+                    <img src="${t.image || 'https://via.placeholder.com/50x50'}" alt="${t.name}">
                     <div class="track-info">
-                        <div>${t.name}</div>
-                        <div class="artist-name">${t.artist}</div>
+                        <div class="name">${t.name}</div>
+                        <div class="artist">${t.artist}</div>
                     </div>
+                    <span class="track-duration">${formatTime(t.duration_ms / 1000)}</span>
                 </div>
             `).join('');
         }
 
-        async function togglePlay() {
-            const endpoint = currentState.isPlaying ? '/api/pause' : '/api/resume';
-            await fetch(endpoint, { method: 'POST' });
+        async function playTrack(index) {
+            currentState.currentIndex = index;
+            const track = currentState.playlist[index];
+            await selectTrack(track.id);
+            showPlaylist(currentState.playlist);
+        }
+
+        function togglePlay() {
+            if (currentState.isPlaying) {
+                audio.pause();
+            } else {
+                audio.play();
+            }
             currentState.isPlaying = !currentState.isPlaying;
             document.getElementById('playBtn').textContent = currentState.isPlaying ? '⏸' : '▶';
         }
 
+        function seek(event) {
+            const progressBar = event.currentTarget;
+            const percent = (event.offsetX / progressBar.offsetWidth);
+            audio.currentTime = percent * audio.duration;
+        }
+
+        function setVolume(value) {
+            audio.volume = value / 100;
+        }
+
         async function nextTrack() {
-            const response = await fetch('/api/next', { method: 'POST' });
-            const data = await response.json();
-            if (data.track) {
-                showPlayer(data.track);
+            try {
+                const response = await fetch('/api/next', { method: 'POST' });
+                const data = await response.json();
+                if (data.track) {
+                    showPlayer(data.track);
+                    if (currentState.playlist.length > 0) {
+                        currentState.currentIndex = (currentState.currentIndex + 1) % currentState.playlist.length;
+                        showPlaylist(currentState.playlist);
+                    }
+                }
+            } catch (e) {
+                showError('Ошибка: ' + e.message);
             }
         }
 
         async function prevTrack() {
-            const response = await fetch('/api/prev', { method: 'POST' });
-            const data = await response.json();
-            if (data.track) {
-                showPlayer(data.track);
+            try {
+                const response = await fetch('/api/prev', { method: 'POST' });
+                const data = await response.json();
+                if (data.track) {
+                    showPlayer(data.track);
+                    if (currentState.playlist.length > 0) {
+                        currentState.currentIndex = (currentState.currentIndex - 1 + currentState.playlist.length) % currentState.playlist.length;
+                        showPlaylist(currentState.playlist);
+                    }
+                }
+            } catch (e) {
+                showError('Ошибка: ' + e.message);
             }
         }
 
