@@ -56,6 +56,7 @@ HTML_TEMPLATE = '''
             <button class="tab active" onclick="switchTab('spotify')">🔍 Spotify</button>
             <button class="tab" onclick="switchTab('local')">📁 Локальные</button>
             <button class="tab" onclick="switchTab('dj')">🎛️ DJ Станция</button>
+            <button class="tab" onclick="switchTab('history')">📜 История</button>
         </div>
         
         <!-- Spotify Tab -->
@@ -89,6 +90,12 @@ HTML_TEMPLATE = '''
             <div class="playlist" id="djPlaylist"></div>
         </div>
         
+        <!-- History Tab -->
+        <div id="history-tab" class="hidden">
+            <h2 style="text-align: center; margin-bottom: 20px;">📜 История</h2>
+            <div class="playlist" id="historyList"></div>
+        </div>
+        
         <div class="player" id="player" style="display:none;">
             <div class="track-name" id="trackName"></div>
             <div class="artist-name" id="artistName"></div>
@@ -97,6 +104,11 @@ HTML_TEMPLATE = '''
                 <button onclick="togglePlay()" id="playBtn">▶</button>
                 <button onclick="nextTrack()">⏭</button>
                 <button onclick="startRadio()">📻 Радио</button>
+            </div>
+            <div class="volume-controls" style="display: flex; justify-content: center; gap: 10px; margin-top: 15px;">
+                <button onclick="volumeDown()" style="background: #f39c12; padding: 8px 15px;">🔉</button>
+                <span id="volumeDisplay" style="align-self: center; color: #b3b3b3;">50%</span>
+                <button onclick="volumeUp()" style="background: #f39c12; padding: 8px 15px;">🔊</button>
             </div>
             <div class="playlist" id="playlistSection" style="display:none;">
                 <h2>Плейлист</h2>
@@ -113,8 +125,10 @@ HTML_TEMPLATE = '''
             document.getElementById('spotify-tab').classList.toggle('hidden', tab !== 'spotify');
             document.getElementById('local-tab').classList.toggle('hidden', tab !== 'local');
             document.getElementById('dj-tab').classList.toggle('hidden', tab !== 'dj');
+            document.getElementById('history-tab').classList.toggle('hidden', tab !== 'history');
             if (tab === 'local') loadLocalFiles();
             if (tab === 'dj') refreshQueue();
+            if (tab === 'history') loadHistory();
         }
         
         async function refreshQueue() {
@@ -157,6 +171,47 @@ HTML_TEMPLATE = '''
                 body: JSON.stringify({index: index})
             });
             refreshQueue();
+        }
+        
+        async function loadHistory() {
+            const response = await fetch('/api/history');
+            const data = await response.json();
+            const container = document.getElementById('historyList');
+            if (data.history && data.history.length > 0) {
+                container.innerHTML = data.history.map(t => 
+                    `<div class="track-item">
+                        <div class="track-info">
+                            <div>${t.name}</div>
+                            <small style="color: #b3b3b3;">${t.artist || ''}</small>
+                        </div>
+                    </div>`
+                ).join('');
+            } else {
+                container.innerHTML = '<p style="text-align: center; color: #b3b3b3;">История пуста</p>';
+            }
+        }
+        
+        async function refreshHistory() {
+            loadHistory();
+        }
+        
+        async function volumeUp() {
+            await fetch('/api/volume/up', { method: 'POST' });
+            updateVolumeDisplay();
+        }
+        
+        async function volumeDown() {
+            await fetch('/api/volume/down', { method: 'POST' });
+            updateVolumeDisplay();
+        }
+        
+        async function updateVolumeDisplay() {
+            const response = await fetch('/api/state');
+            const data = await response.json();
+            const volumeEl = document.getElementById('volumeDisplay');
+            if (volumeEl && data.volume !== undefined) {
+                volumeEl.textContent = data.volume + '%';
+            }
         }
         
         async function loadLocalFiles() {
@@ -211,15 +266,33 @@ HTML_TEMPLATE = '''
             const resultsDiv = document.getElementById('results');
             const resultsList = document.getElementById('resultsList');
             resultsList.innerHTML = tracks.map((track) => 
-                `<div class="track-item" onclick="selectTrack('${track.id}')">
+                `<div class="track-item">
                     <img src="${track.image || ''}" alt="${track.name}">
                     <div class="track-info">
                         <div>${track.name}</div>
                         <div class="artist-name">${track.artist}</div>
                     </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="selectTrack('${track.id}')" style="background: #1DB954; padding: 5px 10px; font-size: 12px;">▶</button>
+                        <button onclick="addToQueueFromSearch('${track.id}')" style="background: #f39c12; padding: 5px 10px; font-size: 12px;">+</button>
+                    </div>
                 </div>`
             ).join('');
             resultsDiv.style.display = 'block';
+        }
+        
+        async function addToQueueFromSearch(trackId) {
+            const response = await fetch('/api/queue/add-from-search', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({track_id: trackId})
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Добавлено в очередь!');
+            } else {
+                alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+            }
         }
         async function selectTrack(trackId) {
             // Сначала пробуем получить данные трека напрямую
@@ -605,6 +678,102 @@ def queue_reorder():
         return jsonify({'success': True})
     except IndexError:
         return jsonify({'error': 'Неверный индекс'}), 400
+
+
+# Управление громкостью
+@app.route('/api/volume', methods=['POST'])
+def set_volume():
+    """Установить громкость (0-100)."""
+    data = request.json
+    volume = data.get('volume', 50)
+    
+    if not isinstance(volume, (int, float)):
+        return jsonify({'error': 'volume must be a number'}), 400
+    
+    volume = max(0, min(100, int(volume)))
+    radio_state['volume'] = volume
+    
+    return jsonify({'success': True, 'volume': volume})
+
+
+@app.route('/api/volume/up', methods=['POST'])
+def volume_up():
+    """Увеличить громкость."""
+    current = radio_state.get('volume', 50)
+    radio_state['volume'] = min(100, current + 10)
+    return jsonify({'success': True, 'volume': radio_state['volume']})
+
+
+@app.route('/api/volume/down', methods=['POST'])
+def volume_down():
+    """Уменьшить громкость."""
+    current = radio_state.get('volume', 50)
+    radio_state['volume'] = max(0, current - 10)
+    return jsonify({'success': True, 'volume': radio_state['volume']})
+
+
+# История воспроизведения
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """Получить историю воспроизведения."""
+    history = radio_state.get('history', [])
+    return jsonify({'history': history})
+
+
+@app.route('/api/history/add', methods=['POST'])
+def add_to_history():
+    """Добавить трек в историю."""
+    data = request.json
+    track = data.get('track')
+    
+    if not track:
+        return jsonify({'error': 'track is required'}), 400
+    
+    if 'history' not in radio_state:
+        radio_state['history'] = []
+    
+    # Добавляем в начало, избегаем дубликатов
+    history = radio_state['history']
+    history = [t for t in history if t.get('id') != track.get('id')]
+    history.insert(0, track)
+    radio_state['history'] = history[:50]  # Храним последние 50
+    
+    return jsonify({'success': True})
+
+
+# Добавить трек в очередь из результатов поиска
+@app.route('/api/queue/add-from-search', methods=['POST'])
+def add_from_search():
+    """Добавить трек в очередь из результатов поиска."""
+    data = request.json
+    track = data.get('track')
+    
+    if not track:
+        return jsonify({'error': 'track is required'}), 400
+    
+    if 'playlist' not in radio_state:
+        radio_state['playlist'] = []
+    
+    radio_state['playlist'].append(track)
+    
+    return jsonify({
+        'success': True,
+        'queue_length': len(radio_state['playlist'])
+    })
+
+
+# API для получения всех данных состояния
+@app.route('/api/state', methods=['GET'])
+def get_state():
+    """Получить полное состояние радио."""
+    return jsonify({
+        'is_playing': radio_state.get('is_playing', False),
+        'current_track': radio_state.get('current_track'),
+        'playlist': radio_state.get('playlist', []),
+        'current_index': radio_state.get('current_index', 0),
+        'volume': radio_state.get('volume', 50),
+        'history': radio_state.get('history', [])[:10]
+    })
 
 
 if __name__ == '__main__':
