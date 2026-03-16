@@ -18,10 +18,10 @@ BOT_PREFIX = "!"
 spotify_client = None
 audio = AudioEngine()
 
-# Настройка intents - только базовые без привилегированных
+# Настройка intents
 intents = discord.Intents.default()
-intents.message_content = False  # Отключаем - не нужен для базовых команд
-intents.voice_states = False  # Отключаем - не нужен для базовых команд
+intents.message_content = True  # Нужен для команд
+intents.voice_states = True  # Нужен для голоса
 
 bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 
