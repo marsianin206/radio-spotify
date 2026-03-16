@@ -2,7 +2,7 @@
 import os
 from typing import Optional, List, Dict
 import spotipy
-from spotipy.oauth_manager import ClientCredentialsManager
+from spotipy.oauth2 import SpotifyClientCredentials
 
 
 class SpotifyClient:
@@ -17,7 +17,7 @@ class SpotifyClient:
         if not self.client_id or not self.client_secret:
             raise ValueError("CLIENT_ID и CLIENT_SECRET должны быть установлены")
         
-        self.manager = ClientCredentialsManager(
+        self.manager = SpotifyClientCredentials(
             client_id=self.client_id,
             client_secret=self.client_secret
         )

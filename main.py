@@ -8,6 +8,9 @@ import argparse
 
 def main():
     """Главная точка входа."""
+    from dotenv import load_dotenv
+    load_dotenv()
+    
     parser = argparse.ArgumentParser(
         description="Spotify Radio - Трансляция музыки из Spotify"
     )

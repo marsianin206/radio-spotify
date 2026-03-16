@@ -6,6 +6,14 @@ from spotify.client import SpotifyClient
 from audio.engine import AudioEngine
 
 
+def get_input(prompt: str = "") -> Optional[str]:
+    """Получить ввод с обработкой ошибок."""
+    try:
+        return input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+
 class SpotifyRadioCLI:
     """Консольный интерфейс для управления радио."""
     
@@ -30,7 +38,10 @@ class SpotifyRadioCLI:
             duration = self.audio.format_duration(track['duration_ms'])
             print(f"  {i}. {track['name']} - {track['artist']} ({duration})")
         
-        choice = input("\n🎵 Выберите трек (номер или 'r' для случайного): ").strip()
+        choice = get_input("\n🎵 Выберите трек (номер или 'r' для случайного): ")
+        if choice is None:
+            print("\n👋 До свидания!")
+            return
         
         if choice.lower() == 'r':
             track = tracks[0]  # Берем первый для радио
@@ -96,7 +107,10 @@ class SpotifyRadioCLI:
         
         while True:
             try:
-                cmd = input("\n🎵 > ").strip()
+                cmd = get_input("\n🎵 > ")
+                if cmd is None:
+                    print("\n👋 До свидания!")
+                    break
                 
                 if cmd.startswith('search '):
                     query = cmd[7:]
