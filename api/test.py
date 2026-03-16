@@ -11,4 +11,4 @@ def index():
 def test():
     return jsonify({"test": "passed"})
 
-handler = app
+# Vercel требует 'app', не 'handler'
