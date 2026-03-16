@@ -23,3 +23,5 @@ Thumbs.db
 .kilocode/
 .kilocodemodes
 .cache
+.vercel
+.env*.local
