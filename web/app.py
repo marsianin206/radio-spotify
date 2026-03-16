@@ -1,5 +1,8 @@
 """Веб-интерфейс Spotify Radio для Vercel."""
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask, request, jsonify, Response
 
 # HTML шаблон (встроенный для Vercel совместимости)
