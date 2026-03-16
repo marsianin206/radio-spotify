@@ -241,13 +241,14 @@ def get_playlist():
 @app.route('/api/next', methods=['POST'])
 def next_track():
     """API для следующего трека."""
-    if not radio_state['playlist'] or len(radio_state['playlist']) == 0:
+    playlist = radio_state.get('playlist', [])
+    if not playlist:
         return jsonify({'error': 'No playlist'}), 400
     
-    idx = radio_state['current_index'] or 0
-    playlist_len = len(radio_state['playlist'])
+    idx = radio_state.get('current_index', 0) or 0
+    playlist_len = len(playlist)
     radio_state['current_index'] = (idx + 1) % playlist_len
-    radio_state['current_track'] = radio_state['playlist'][radio_state['current_index']]
+    radio_state['current_track'] = playlist[radio_state['current_index']]
     
     return jsonify({'track': radio_state['current_track']})
 
@@ -255,13 +256,14 @@ def next_track():
 @app.route('/api/prev', methods=['POST'])
 def prev_track():
     """API для предыдущего трека."""
-    if not radio_state['playlist'] or len(radio_state['playlist']) == 0:
+    playlist = radio_state.get('playlist', [])
+    if not playlist:
         return jsonify({'error': 'No playlist'}), 400
     
-    idx = radio_state['current_index'] or 0
-    playlist_len = len(radio_state['playlist'])
+    idx = radio_state.get('current_index', 0) or 0
+    playlist_len = len(playlist)
     radio_state['current_index'] = (idx - 1) % playlist_len
-    radio_state['current_track'] = radio_state['playlist'][radio_state['current_index']]
+    radio_state['current_track'] = playlist[radio_state['current_index']]
     
     return jsonify({'track': radio_state['current_track']})
 
