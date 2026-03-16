@@ -21,7 +21,5 @@ COPY . .
 # Expose ports
 EXPOSE 5000
 
-# Run both web and bot
-CMD python main.py web --port 5000 & \
-    python main.py discord & \
-    wait
+# Run all services together
+CMD python main.py all --port 5000

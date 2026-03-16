@@ -16,10 +16,10 @@ def main():
     )
     parser.add_argument(
         'mode',
-        choices=['cli', 'web', 'discord'],
+        choices=['cli', 'web', 'discord', 'all'],
         nargs='?',
         default='cli',
-        help='Режим запуска: cli (консоль), web (веб-интерфейс), discord (Discord бот)'
+        help='Режим запуска: cli (консоль), web (веб-интерфейс), discord (Discord бот), all (все вместе)'
     )
     parser.add_argument(
         '--port',
@@ -59,6 +59,31 @@ def main():
             sys.exit(1)
         
         bot.run(token)
+
+    elif args.mode == 'all':
+        print("🚀 Запуск всех сервисов (веб + Discord бот)...")
+        import os
+        import threading
+        import asyncio
+        
+        # Запускаем веб в отдельном потоке
+        def run_web():
+            from web.app import app
+            app.run(host=args.host, port=args.port, debug=False)
+        
+        web_thread = threading.Thread(target=run_web, daemon=True)
+        web_thread.start()
+        print(f"🌐 Веб-интерфейс запущен на порту {args.port}")
+        
+        # Запускаем Discord бота
+        from bot.main import bot
+        token = os.getenv('DISCORD_TOKEN')
+        if not token:
+            print("❌ Не найден DISCORD_TOKEN в .env файле")
+            print("Веб интерфейс работает, но бот не запущен")
+        else:
+            print("🤖 Discord бот запущен")
+            bot.run(token)
 
 
 if __name__ == '__main__':
