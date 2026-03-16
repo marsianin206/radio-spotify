@@ -355,8 +355,8 @@ async def volume(ctx, vol: int):
         await ctx.send("❌ Громкость должна быть от 0 до 100")
 
 
-@bot.command(name="help", help="Показать помощь")
-async def help_cmd(ctx):
+@bot.command(name="help_radio", help="Показать помощь")
+async def help_radio(ctx):
     """Помощь по командам."""
     embed = discord.Embed(
         title="🎧 Spotify Radio - Команды",
