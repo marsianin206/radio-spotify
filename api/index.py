@@ -9,5 +9,4 @@ if project_root not in sys.path:
 
 from web.app import app
 
-# Экспортируем для Vercel
-handler = app
+# Vercel требует 'app'
