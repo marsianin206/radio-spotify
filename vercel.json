@@ -5,7 +5,13 @@
             "use": "@vercel/python",
             "config": {
                 "maxLambdaSize": "50mb",
-                "pythonVersion": "3.11"
+                "pythonVersion": "3.11",
+                "includeFiles": [
+                    "web/**/*",
+                    "spotify/**/*",
+                    "audio/**/*",
+                    "requirements.txt"
+                ]
             }
         }
     ],
