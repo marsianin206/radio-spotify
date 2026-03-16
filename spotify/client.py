@@ -3,7 +3,6 @@ import os
 from typing import Optional, List, Dict
 import spotipy
 from spotipy.oauth_manager import ClientCredentialsManager
-from dotenv import load_dotenv
 
 
 class SpotifyClient:
@@ -11,13 +10,12 @@ class SpotifyClient:
     
     def __init__(self):
         """Инициализация клиента с аутентификацией."""
-        load_dotenv()
-        
-        self.client_id = os.getenv("CLIENT_ID")
-        self.client_secret = os.getenv("CLIENT_SECRET")
+        # Пробуем получить из переменных окружения
+        self.client_id = os.environ.get("CLIENT_ID") or os.getenv("CLIENT_ID")
+        self.client_secret = os.environ.get("CLIENT_SECRET") or os.getenv("CLIENT_SECRET")
         
         if not self.client_id or not self.client_secret:
-            raise ValueError("CLIENT_ID и CLIENT_SECRET должны быть в .env файле")
+            raise ValueError("CLIENT_ID и CLIENT_SECRET должны быть установлены")
         
         self.manager = ClientCredentialsManager(
             client_id=self.client_id,
