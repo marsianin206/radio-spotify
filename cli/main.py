@@ -98,11 +98,12 @@ class SpotifyRadioCLI:
         print("🎧 Spotify Radio CLI")
         print("=" * 50)
         print("Команды:")
-        print("  search <запрос>  - Поиск и воспроизведение")
-        print("  playlist        - Показать плейлист")
-        print("  next            - Следующий трек")
-        print("  prev            - Предыдущий трек")
-        print("  quit            - Выход")
+        print("  <номер>        - Воспроизвести трек по номеру")
+        print("  search <запрос> - Поиск и воспроизведение")
+        print("  playlist       - Показать плейлист")
+        print("  next           - Следующий трек")
+        print("  prev           - Предыдущий трек")
+        print("  quit           - Выход")
         print("=" * 50)
         
         while True:
@@ -112,7 +113,11 @@ class SpotifyRadioCLI:
                     print("\n👋 До свидания!")
                     break
                 
-                if cmd.startswith('search '):
+                # Если введена только цифра - выбираем трек по номеру
+                if cmd.strip().isdigit():
+                    track_num = int(cmd.strip())
+                    self.play_by_number(track_num)
+                elif cmd.startswith('search '):
                     query = cmd[7:]
                     await self.search_and_play(query)
                 elif cmd == 'playlist':
@@ -131,6 +136,19 @@ class SpotifyRadioCLI:
                 break
             except Exception as e:
                 print(f"❌ Ошибка: {e}")
+    
+    def play_by_number(self, track_num: int):
+        """Воспроизвести трек по номеру."""
+        if not self.current_playlist:
+            print("📭 Нет треков в плейлисте. Сначала выполните поиск!")
+            return
+        
+        if 1 <= track_num <= len(self.current_playlist):
+            self.current_index = track_num - 1
+            track = self.current_playlist[self.current_index]
+            print(f"\n▶ Выбран трек #{track_num}: {track['name']} - {track['artist']}")
+        else:
+            print(f"❌ Неверный номер. Введите от 1 до {len(self.current_playlist)}")
     
     def next_track(self):
         """Перейти к следующему треку."""

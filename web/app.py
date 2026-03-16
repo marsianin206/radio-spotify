@@ -1,9 +1,10 @@
 """Веб-интерфейс Spotify Radio для Vercel."""
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, send_from_directory
 
 # HTML шаблон (встроенный для Vercel совместимости)
 HTML_TEMPLATE = '''
@@ -19,10 +20,14 @@ HTML_TEMPLATE = '''
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         header { text-align: center; padding: 40px 0; }
         h1 { font-size: 3rem; margin-bottom: 10px; }
+        .tabs { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+        .tab { padding: 15px 30px; background: rgba(255,255,255,0.1); border: none; border-radius: 30px; color: white; font-size: 16px; cursor: pointer; }
+        .tab.active { background: #1DB954; }
         .search-box { display: flex; gap: 10px; max-width: 600px; margin: 0 auto 30px; }
         input { flex: 1; padding: 15px 20px; border: none; border-radius: 30px; font-size: 16px; outline: none; }
         button { padding: 15px 30px; border: none; border-radius: 30px; background: #1DB954; color: white; font-size: 16px; cursor: pointer; }
         button:hover { transform: scale(1.05); }
+        button:disabled { background: #535353; cursor: not-allowed; }
         .player { background: rgba(0,0,0,0.5); border-radius: 20px; padding: 30px; margin-top: 30px; text-align: center; }
         .track-name { font-size: 1.5rem; margin-bottom: 5px; }
         .artist-name { color: #b3b3b3; }
@@ -34,6 +39,11 @@ HTML_TEMPLATE = '''
         .track-item img { width: 50px; height: 50px; border-radius: 5px; margin-right: 15px; }
         .track-info { flex: 1; text-align: left; }
         .results { margin-top: 30px; }
+        .error { background: rgba(255,0,0,0.3); padding: 15px; border-radius: 10px; margin: 10px 0; }
+        .local-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; padding: 20px; }
+        .local-file { background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px; cursor: pointer; text-align: center; }
+        .local-file:hover { background: rgba(29,185,84,0.3); }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -42,14 +52,43 @@ HTML_TEMPLATE = '''
             <h1>🎧 Spotify Radio</h1>
             <p>Поиск и потоковая трансляция музыки</p>
         </header>
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Поиск трека...">
-            <button onclick="search()">Поиск</button>
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('spotify')">🔍 Spotify</button>
+            <button class="tab" onclick="switchTab('local')">📁 Локальные</button>
+            <button class="tab" onclick="switchTab('dj')">🎛️ DJ Станция</button>
         </div>
-        <div class="results" id="results" style="display:none;">
-            <h2>Результаты поиска</h2>
-            <div id="resultsList"></div>
+        
+        <!-- Spotify Tab -->
+        <div id="spotify-tab">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Поиск трека...">
+                <button onclick="search()">Поиск</button>
+            </div>
+            <div id="error-msg" class="error hidden"></div>
+            <div class="results" id="results" style="display:none;">
+                <h2>Результаты поиска</h2>
+                <div id="resultsList"></div>
+            </div>
         </div>
+        
+        <!-- Local Tab -->
+        <div id="local-tab" class="hidden">
+            <h2 style="text-align: center; margin-bottom: 20px;">Локальные файлы</h2>
+            <div class="local-files" id="localFiles"></div>
+        </div>
+        
+        <!-- DJ Station Tab -->
+        <div id="dj-tab" class="hidden">
+            <h2 style="text-align: center; margin-bottom: 20px;">🎛️ DJ Станция</h2>
+            <div class="dj-controls" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                <button onclick="shufflePlaylist()" style="background: #9b59b6;">🔀 Перемешать</button>
+                <button onclick="clearPlaylist()" style="background: #e74c3c;">🗑️ Очистить</button>
+                <button onclick="refreshQueue()" style="background: #3498db;">🔄 Обновить</button>
+            </div>
+            <div class="queue-info" id="queueInfo" style="text-align: center; margin-bottom: 10px; color: #b3b3b3;"></div>
+            <div class="playlist" id="djPlaylist"></div>
+        </div>
+        
         <div class="player" id="player" style="display:none;">
             <div class="track-name" id="trackName"></div>
             <div class="artist-name" id="artistName"></div>
@@ -67,13 +106,107 @@ HTML_TEMPLATE = '''
     </div>
     <script>
         let currentState = { isPlaying: false, currentTrack: null, playlist: [] };
+        
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('spotify-tab').classList.toggle('hidden', tab !== 'spotify');
+            document.getElementById('local-tab').classList.toggle('hidden', tab !== 'local');
+            document.getElementById('dj-tab').classList.toggle('hidden', tab !== 'dj');
+            if (tab === 'local') loadLocalFiles();
+            if (tab === 'dj') refreshQueue();
+        }
+        
+        async function refreshQueue() {
+            const response = await fetch('/api/playlist');
+            const data = await response.json();
+            const container = document.getElementById('djPlaylist');
+            const info = document.getElementById('queueInfo');
+            if (data.playlist && data.playlist.length > 0) {
+                info.textContent = `В очереди: ${data.playlist.length} треков`;
+                container.innerHTML = data.playlist.map((t, i) => 
+                    `<div class="track-item">
+                        <span style="margin-right: 10px; color: #1DB954;">${i + 1}</span>
+                        <div class="track-info">
+                            <div>${t.name}</div>
+                            <small style="color: #b3b3b3;">${t.artist || ''}</small>
+                        </div>
+                        <button onclick="removeFromQueue(${i})" style="background: #e74c3c; padding: 5px 10px; font-size: 12px;">✕</button>
+                    </div>`
+                ).join('');
+            } else {
+                info.textContent = 'Плейлист пуст';
+                container.innerHTML = '<p style="text-align: center; color: #b3b3b3;">Нет треков в плейлисте</p>';
+            }
+        }
+        
+        async function shufflePlaylist() {
+            await fetch('/api/queue/shuffle', { method: 'POST' });
+            refreshQueue();
+        }
+        
+        async function clearPlaylist() {
+            await fetch('/api/queue/clear', { method: 'POST' });
+            refreshQueue();
+        }
+        
+        async function removeFromQueue(index) {
+            await fetch('/api/queue/remove', { 
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({index: index})
+            });
+            refreshQueue();
+        }
+        
+        async function loadLocalFiles() {
+            const response = await fetch('/api/local/files');
+            const data = await response.json();
+            const container = document.getElementById('localFiles');
+            if (data.files && data.files.length > 0) {
+                container.innerHTML = data.files.map(f => 
+                    `<div class="local-file" onclick="playLocal('${f}')">🎵 ${f}</div>`
+                ).join('');
+            } else {
+                container.innerHTML = '<p>Файлы не найдены. Положите mp3/wav файлы в папку music/</p>';
+            }
+        }
+        
+        async function playLocal(filename) {
+            const response = await fetch('/api/local/play', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename})
+            });
+            const data = await response.json();
+            if (data.success) {
+                showPlayer(data.track);
+            }
+        }
+        
         async function search() {
             const query = document.getElementById('searchInput').value;
             if (!query) return;
             const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
             const data = await response.json();
-            if (data.tracks) showResults(data.tracks);
+            if (data.error) {
+                showError(data.error);
+            } else if (data.tracks) {
+                hideError();
+                showResults(data.tracks);
+            }
         }
+        
+        function showError(msg) {
+            const errDiv = document.getElementById('error-msg');
+            errDiv.textContent = 'Ошибка: ' + msg;
+            errDiv.classList.remove('hidden');
+        }
+        
+        function hideError() {
+            document.getElementById('error-msg').classList.add('hidden');
+        }
+        
         function showResults(tracks) {
             const resultsDiv = document.getElementById('results');
             const resultsList = document.getElementById('resultsList');
@@ -89,9 +222,26 @@ HTML_TEMPLATE = '''
             resultsDiv.style.display = 'block';
         }
         async function selectTrack(trackId) {
+            // Сначала пробуем получить данные трека напрямую
             const response = await fetch('/api/play', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({track_id: trackId}) });
             const data = await response.json();
-            if (data.track) showPlayer(data.track);
+            if (data.track) {
+                showPlayer(data.track);
+                currentState.currentTrack = data.track;
+            } else if (data.error) {
+                alert(data.error);
+            }
+        }
+        async function playTrackFromSearch(track) {
+            // Отправляем трек напрямую
+            const response = await fetch('/api/play', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({track: track}) });
+            const data = await response.json();
+            if (data.track) {
+                showPlayer(data.track);
+                currentState.currentTrack = track;
+            } else if (data.error) {
+                alert(data.error);
+            }
         }
         async function startRadio() {
             if (!currentState.currentTrack) return;
@@ -192,9 +342,16 @@ def play():
     """API для воспроизведения трека."""
     data = request.json
     track_id = data.get('track_id')
+    track_data = data.get('track')  # Можно передать трек напрямую
+    
+    if track_data:
+        # Используем данные трека из поиска
+        radio_state['current_track'] = track_data
+        radio_state['is_playing'] = True
+        return jsonify({'success': True, 'track': track_data})
     
     if not track_id:
-        return jsonify({'error': 'track_id is required'}), 400
+        return jsonify({'error': 'track_id or track is required'}), 400
     
     try:
         spotify = get_spotify_client()
@@ -203,6 +360,9 @@ def play():
         radio_state['is_playing'] = True
         return jsonify({'success': True, 'track': track})
     except Exception as e:
+        error_msg = str(e)
+        if '403' in error_msg or 'premium' in error_msg.lower():
+            return jsonify({'error': 'Требуется Spotify Premium для воспроизведения треков. Используйте локальные файлы.'}), 400
         return jsonify({'error': str(e)}), 500
 
 
@@ -242,8 +402,21 @@ def get_playlist():
 def next_track():
     """API для следующего трека."""
     playlist = radio_state.get('playlist', [])
+    
+    # Если плейлист пуст, пробуем создать радио
     if not playlist:
-        return jsonify({'error': 'No playlist'}), 400
+        current = radio_state.get('current_track')
+        if current and current.get('id'):
+            try:
+                spotify = get_spotify_client()
+                playlist = spotify.create_radio_playlist(current['id'], limit=20)
+                radio_state['playlist'] = playlist
+                radio_state['current_index'] = 0
+            except:
+                pass
+    
+    if not playlist:
+        return jsonify({'error': 'Сначала найдите трек или создайте радио!'}), 400
     
     idx = radio_state.get('current_index', 0) or 0
     playlist_len = len(playlist)
@@ -257,8 +430,21 @@ def next_track():
 def prev_track():
     """API для предыдущего трека."""
     playlist = radio_state.get('playlist', [])
+    
+    # Если плейлист пуст, пробуем создать радио
     if not playlist:
-        return jsonify({'error': 'No playlist'}), 400
+        current = radio_state.get('current_track')
+        if current and current.get('id'):
+            try:
+                spotify = get_spotify_client()
+                playlist = spotify.create_radio_playlist(current['id'], limit=20)
+                radio_state['playlist'] = playlist
+                radio_state['current_index'] = 0
+            except:
+                pass
+    
+    if not playlist:
+        return jsonify({'error': 'Сначала найдите трек или создайте радио!'}), 400
     
     idx = radio_state.get('current_index', 0) or 0
     playlist_len = len(playlist)
@@ -280,6 +466,145 @@ def resume():
     """API для возобновления."""
     radio_state['is_playing'] = True
     return jsonify({'success': True})
+
+
+# Локальные файлы
+import os
+from pathlib import Path
+
+@app.route('/api/local/files')
+def get_local_files():
+    """Получить список локальных файлов."""
+    music_dir = Path(__file__).parent.parent / 'music'
+    audio_exts = {'.mp3', '.wav', '.ogg', '.flac', '.m4a'}
+    files = []
+    if music_dir.exists():
+        for f in music_dir.iterdir():
+            if f.is_file() and f.suffix.lower() in audio_exts:
+                files.append(f.name)
+    return jsonify({'files': files})
+
+
+@app.route('/api/local/play', methods=['POST'])
+def play_local():
+    """Воспроизвести локальный файл."""
+    data = request.json
+    filename = data.get('filename')
+    
+    if not filename:
+        return jsonify({'error': 'filename is required'}), 400
+    
+    music_dir = Path(__file__).parent.parent / 'music'
+    file_path = music_dir / filename
+    
+    if not file_path.exists():
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Обновляем состояние
+    radio_state['current_track'] = {
+        'name': filename,
+        'artist': 'Локальный файл',
+        'type': 'local'
+    }
+    radio_state['is_playing'] = True
+    radio_state['local_file'] = str(file_path)
+    
+    return jsonify({
+        'success': True, 
+        'track': radio_state['current_track']
+    })
+
+
+@app.route('/api/queue/add', methods=['POST'])
+def queue_add():
+    """Добавить трек в очередь воспроизведения."""
+    data = request.json
+    track = data.get('track')
+    
+    if not track:
+        return jsonify({'error': 'track is required'}), 400
+    
+    if 'playlist' not in radio_state:
+        radio_state['playlist'] = []
+    
+    radio_state['playlist'].append(track)
+    
+    return jsonify({
+        'success': True,
+        'queue_length': len(radio_state['playlist'])
+    })
+
+
+@app.route('/api/queue/remove', methods=['POST'])
+def queue_remove():
+    """Удалить трек из очереди по индексу."""
+    data = request.json
+    index = data.get('index')
+    
+    if 'playlist' not in radio_state or not radio_state['playlist']:
+        return jsonify({'error': 'Плейлист пуст'}), 400
+    
+    try:
+        removed = radio_state['playlist'].pop(index)
+        return jsonify({'success': True, 'removed': removed})
+    except IndexError:
+        return jsonify({'error': 'Неверный индекс'}), 400
+
+
+@app.route('/api/queue/shuffle', methods=['POST'])
+def queue_shuffle():
+    """Перемешать плейлист."""
+    import random
+    
+    playlist = radio_state.get('playlist', [])
+    
+    # Если плейлист пуст, пробуем создать радио
+    if not playlist:
+        current = radio_state.get('current_track')
+        if current and isinstance(current, dict) and current.get('id'):
+            try:
+                spotify = get_spotify_client()
+                playlist = spotify.create_radio_playlist(current['id'], limit=20)
+                radio_state['playlist'] = playlist
+                radio_state['current_index'] = 0
+            except:
+                pass
+    
+    if not playlist:
+        return jsonify({'error': 'Сначала найдите трек или создайте радио!'}), 400
+    
+    random.shuffle(radio_state['playlist'])
+    radio_state['current_index'] = 0
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/queue/clear', methods=['POST'])
+def queue_clear():
+    """Очистить плейлист."""
+    radio_state['playlist'] = []
+    radio_state['current_index'] = 0
+    radio_state['current_track'] = None
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/queue/reorder', methods=['POST'])
+def queue_reorder():
+    """Переместить трек в плейлисте."""
+    data = request.json
+    from_index = data.get('from_index')
+    to_index = data.get('to_index')
+    
+    if 'playlist' not in radio_state or not radio_state['playlist']:
+        return jsonify({'error': 'Плейлист пуст'}), 400
+    
+    try:
+        track = radio_state['playlist'].pop(from_index)
+        radio_state['playlist'].insert(to_index, track)
+        return jsonify({'success': True})
+    except IndexError:
+        return jsonify({'error': 'Неверный индекс'}), 400
 
 
 if __name__ == '__main__':

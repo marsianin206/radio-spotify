@@ -3,8 +3,14 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+from typing import Optional
+import os
+from pathlib import Path
+
 import discord
+from discord import ButtonStyle
 from discord.ext import commands
+from discord import ui
 import asyncio
 from spotify.client import SpotifyClient
 from audio.engine import AudioEngine
@@ -26,6 +32,89 @@ intents.voice_states = True  # Нужен для голоса
 bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 
 
+# Класс кнопок для управления плеером
+class PlayerView(ui.View):
+    """Кнопки управления плеером."""
+    def __init__(self, guild_id):
+        super().__init__(timeout=None)  # Без таймаута для persistent view
+        self.guild_id = guild_id
+    
+    @ui.button(emoji="⏮", style=ButtonStyle.primary, custom_id="prev")
+    async def prev_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Предыдущий трек."""
+        guild_id = interaction.guild.id if interaction.guild else None
+        if guild_id and guild_id in radio_servers:
+            state = radio_servers[guild_id]
+            if state.playlist and state.current_index > 0:
+                state.current_index -= 1
+                if state.voice_client:
+                    state.voice_client.stop()
+                await interaction.response.send_message("⏮ Предыдущий трек", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Бот не в голосовом канале", ephemeral=True)
+    
+    @ui.button(emoji="⏸", style=ButtonStyle.primary, custom_id="pause")
+    async def pause_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Пауза/Продолжить."""
+        guild_id = interaction.guild.id if interaction.guild else None
+        if guild_id and guild_id in radio_servers:
+            state = radio_servers[guild_id]
+            if state.voice_client and state.voice_client.is_playing():
+                state.voice_client.pause()
+                state.is_paused = True
+                await interaction.response.send_message("⏸ Пауза", ephemeral=True)
+            elif state.voice_client and state.is_paused:
+                state.voice_client.resume()
+                state.is_paused = False
+                await interaction.response.send_message("▶ Продолжаю", ephemeral=True)
+    
+    @ui.button(emoji="⏭", style=ButtonStyle.primary, custom_id="next")
+    async def next_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Следующий трек."""
+        guild_id = interaction.guild.id if interaction.guild else None
+        if guild_id and guild_id in radio_servers:
+            state = radio_servers[guild_id]
+            if state.voice_client:
+                state.voice_client.stop()
+                await interaction.response.send_message("⏭ Следующий трек", ephemeral=True)
+    
+    @ui.button(emoji="🔀", style=ButtonStyle.secondary, custom_id="shuffle")
+    async def shuffle_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Перемешать плейлист."""
+        guild_id = interaction.guild.id if interaction.guild else None
+        if guild_id and guild_id in radio_servers:
+            state = radio_servers[guild_id]
+            if state.playlist:
+                import random
+                random.shuffle(state.playlist)
+                state.current_index = 0
+                await interaction.response.send_message("🔀 Плейлист перемешан!", ephemeral=True)
+    
+    @ui.button(emoji="🔊", style=ButtonStyle.secondary, custom_id="vol_up")
+    async def vol_up_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Увеличить громкость."""
+        guild_id = interaction.guild.id if interaction.guild else None
+        if guild_id and guild_id in radio_servers:
+            state = radio_servers[guild_id]
+            if hasattr(state, 'volume'):
+                state.volume = min(1.0, state.volume + 0.1)
+                if state.voice_client and hasattr(state.voice_client.source, 'volume'):
+                    state.voice_client.source.volume = state.volume
+            await interaction.response.send_message(f"🔊 Громкость: {int(state.volume * 100)}%", ephemeral=True)
+    
+    @ui.button(emoji="🔉", style=ButtonStyle.secondary, custom_id="vol_down")
+    async def vol_down_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Уменьшить громкость."""
+        guild_id = interaction.guild.id if interaction.guild else None
+        if guild_id and guild_id in radio_servers:
+            state = radio_servers[guild_id]
+            if hasattr(state, 'volume'):
+                state.volume = max(0.0, state.volume - 0.1)
+                if state.voice_client and hasattr(state.voice_client.source, 'volume'):
+                    state.voice_client.source.volume = state.volume
+            await interaction.response.send_message(f"🔉 Громкость: {int(state.volume * 100)}%", ephemeral=True)
+
+
 # Состояние радио для каждого сервера
 radio_servers = {}
 
@@ -39,6 +128,7 @@ class RadioState:
         self.current_index = 0
         self.is_playing = False
         self.is_paused = False
+        self.volume = 0.5
 
 
 def get_spotify():
@@ -74,7 +164,14 @@ async def join(ctx):
     if ctx.author.voice:
         channel = ctx.author.voice.channel
         vc = await channel.connect()
-        await ctx.send(f"✅ Подключился к {channel.name}")
+        
+        # Сохраняем состояние
+        guild_id = ctx.guild.id
+        if guild_id not in radio_servers:
+            radio_servers[guild_id] = RadioState()
+        radio_servers[guild_id].voice_client = vc
+        
+        await ctx.send(f"✅ Подключился к {channel.name}. Используйте !controls для управления!")
     else:
         await ctx.send("❌ Вы не в голосовом канале")
 
@@ -152,28 +249,30 @@ async def play_track(ctx, track, state):
     state.is_playing = True
     state.is_paused = False
     
+    # Опции FFmpeg для максимального качества звука
+    ffmpeg_options = {
+        'options': '-vn -af "loudnorm=I=-16:TP=-1.5:LRA=11" -b:a 320k'
+    }
+    
     # Пытаемся получить preview URL или ищем на YouTube
     if track.get('preview_url'):
-        source = discord.FFmpegPCMAudio(track['preview_url'])
+        source = discord.FFmpegPCMAudio(track['preview_url'], **ffmpeg_options)
     else:
         await ctx.send("⚠️ Нет превью, ищу на YouTube...")
         audio_url = await audio.get_audio_url(track['name'], track['artist'])
         if audio_url:
-            source = discord.FFmpegPCMAudio(audio_url)
+            source = discord.FFmpegPCMAudio(audio_url, **ffmpeg_options)
         else:
             await ctx.send("❌ Не удалось найти аудио")
             return
     
-    # Создание трансформаера для управления громкостью
-    transformer = discord.PCMVolumeTransformer(source)
-    transformer.volume = 0.5
-    
+    # Без трансформера - чистый звук без изменений
     def after_playing(error):
         if error:
             print(f"Ошибка воспроизведения: {error}")
         asyncio.run_coroutine_threadsafe(play_next(ctx, state), bot.loop)
     
-    state.voice_client.play(transformer, after=after_playing)
+    state.voice_client.play(source, after=after_playing)
     
     # Создание embed с информацией о треке
     embed = discord.Embed(
@@ -235,6 +334,101 @@ async def radio(ctx, *, query: str):
         
         await ctx.send(f"✅ Создано радио из **{len(playlist)}** треков!")
         await play_track(ctx, playlist[0], state)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Ошибка: {str(e)}")
+
+
+@bot.command(name="local", help="Воспроизвести локальный файл")
+async def local_play(ctx, *, filepath: Optional[str] = None):
+    """Воспроизведение локального аудио файла."""
+    import os
+    from pathlib import Path
+    
+    # Папка с музыкой
+    music_folder = Path(__file__).parent.parent / 'music'
+    
+    if not ctx.author.voice:
+        await ctx.send("❌ Сначала зайдите в голосовой канал!")
+        return
+    
+    # Если файл не указан - показываем список файлов
+    if not filepath:
+        # Сканируем папку music
+        audio_extensions = {'.mp3', '.wav', '.ogg', '.flac', '.m4a'}
+        files = []
+        if music_folder.exists():
+            for f in music_folder.iterdir():
+                if f.is_file() and f.suffix.lower() in audio_extensions:
+                    files.append(f.name)
+        
+        if not files:
+            await ctx.send("📁 Папка music пуста! Положите туда mp3/wav/ogg файлы.")
+            return
+        
+        # Показываем список файлов
+        embed = discord.Embed(
+            title="🎵 Доступные файлы в папке music:",
+            color=discord.Color.blue()
+        )
+        files_list = "\n".join([f"{i+1}. {f}" for i, f in enumerate(files[:10])])
+        embed.add_field(name="Файлы:", value=files_list or "Нет файлов")
+        embed.add_field(name="Как.play", value="`!local <имя_файла>`\nНапример: `!local song.mp3`", inline=False)
+        await ctx.send(embed=embed)
+        return
+    
+    guild_id = ctx.guild.id
+    
+    # Подключение к голосовому каналу
+    if ctx.voice_client:
+        await ctx.voice_client.move_to(ctx.author.voice.channel)
+    else:
+        vc = await ctx.author.voice.channel.connect()
+    
+    if guild_id not in radio_servers:
+        radio_servers[guild_id] = RadioState()
+    
+    state = radio_servers[guild_id]
+    state.voice_client = ctx.voice_client
+    
+    await ctx.send(f"📁 Воспроизвожу: {filepath}...")
+    
+    try:
+        # Проверка существования файла
+        file_path = Path(filepath)
+        if not file_path.exists():
+            # Ищем в папке music
+            music_file = music_folder / filepath
+            if music_file.exists():
+                filepath = str(music_file)
+            else:
+                await ctx.send(f"❌ Файл не найден: {filepath}\n\nСписок файлов: `!local`")
+                return
+        else:
+            filepath = str(file_path)
+        
+        # Создание источника аудио с максимальным качеством
+        ffmpeg_options = {
+            'options': '-vn -af "loudnorm=I=-16:TP=-1.5:LRA=11" -b:a 320k'
+        }
+        source = discord.FFmpegPCMAudio(filepath, **ffmpeg_options)
+        
+        state.is_playing = True
+        state.is_paused = False
+        state.current_track = {'name': os.path.basename(filepath), 'artist': 'Локальный файл'}
+        
+        def after_playing(error):
+            if error:
+                print(f"Ошибка воспроизведения: {error}")
+        
+        state.voice_client.play(source, after=after_playing)
+        
+        embed = discord.Embed(
+            title="▶ Локальное воспроизведение:",
+            description=f"**{os.path.basename(filepath)}**",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
         
     except Exception as e:
         await ctx.send(f"❌ Ошибка: {str(e)}")
@@ -362,20 +556,99 @@ async def help_radio(ctx):
         title="🎧 Spotify Radio - Команды",
         color=discord.Color.green()
     )
-    embed.add_field(name="!join", value="Подключиться к голосовому каналу", inline=False)
-    embed.add_field(name="!leave", value="Отключиться от голосового канала", inline=False)
-    embed.add_field(name="!play <запрос>", value="Поиск и воспроизведение", inline=False)
-    embed.add_field(name="!radio <запрос>", value="Создать радио на основе трека", inline=False)
-    embed.add_field(name="!pause", value="Пауза", inline=False)
-    embed.add_field(name="!resume", value="Продолжить", inline=False)
-    embed.add_field(name="!skip", value="Пропустить трек", inline=False)
-    embed.add_field(name="!stop", value="Остановить воспроизведение", inline=False)
-    embed.add_field(name="!queue", value="Показать плейлист", inline=False)
-    embed.add_field(name="!now", value="Показать текущий трек", inline=False)
-    embed.add_field(name="!volume <0-100>", value="Установить громкость", inline=False)
-    embed.add_field(name="!ping", value="Проверить пинг", inline=False)
+    embed.add_field(name="🎵 !play <песня>", value="Найти и играть", inline=False)
+    embed.add_field(name="📻 !radio <песня/жанр>", value="Создать радио", inline=False)
+    embed.add_field(name="📁 !local <файл>", value="Локальный файл", inline=False)
+    embed.add_field(name="⏸ !pause / !resume", value="Пауза/Продолжить", inline=False)
+    embed.add_field(name="⏭ !skip / !stop", value="Следующий/Остановить", inline=False)
+    embed.add_field(name="🎛 !controls", value="Кнопки управления", inline=False)
+    embed.add_field(name="📋 !queue", value="Плейлист", inline=False)
+    embed.add_field(name="💿 !now", value="Что играет", inline=False)
     
     await ctx.send(embed=embed)
+
+
+@bot.command(name="controls", help="Показать кнопки управления плеером")
+async def controls(ctx):
+    """Показать кнопки управления плеером."""
+    guild_id = ctx.guild.id
+    
+    if guild_id not in radio_servers:
+        await ctx.send("❌ Бот не в голосовом канале! Используйте `!join`")
+        return
+    
+    view = PlayerView(guild_id)
+    # Сохраняем view для обработки callback
+    bot.add_view(view, message_id=None)
+    
+    embed = discord.Embed(
+        title="🎛 Управление плеером",
+        description="Нажмите кнопки для управления воспроизведением",
+        color=discord.Color.blue()
+    )
+    await ctx.send(embed=embed, view=view)
+
+
+# === ПРОСТЫЕ КОМАНДЫ (ALIASES) ===
+# Автоматическое подключение при любой команде воспроизведения
+@bot.command(name="стоп")
+async def stop_ru(ctx):
+    await stop(ctx)
+
+@bot.command(name="пауза")
+async def pause_ru(ctx):
+    await pause(ctx)
+
+@bot.command(name="продолжить")
+async def resume_ru(ctx):
+    await resume(ctx)
+
+@bot.command(name="следующий")
+async def next_ru(ctx):
+    await skip(ctx)
+
+@bot.command(name="плейлист")
+async def queue_ru(ctx):
+    await queue(ctx)
+
+@bot.command(name="сейчас")
+async def now_ru(ctx):
+    await now(ctx)
+
+@bot.command(name="очередь")
+async def queue2_ru(ctx):
+    await queue(ctx)
+
+
+# === АВТОМАТИЧЕСКОЕ ПОДКЛЮЧЕНИЕ ===
+@bot.event
+async def on_message(message):
+    """Автоматическое подключение к голосовому каналу."""
+    # Игнорируем сообщения ботов
+    if message.author.bot:
+        return
+    
+    # Проверяем команды воспроизведения
+    play_commands = ['play', 'radio', 'local', 'join']
+    content = message.content.lower().strip()
+    
+    # Если это команда воспроизведения и пользователь в голосовом канале
+    if any(content.startswith(f'!{cmd}') or content.startswith(f'/ {cmd}') for cmd in ['play', 'radio', 'local']):
+        if message.author.voice and message.guild:
+            guild_id = message.guild.id
+            
+            # Подключаем если ещё не подключены
+            if guild_id not in radio_servers or not radio_servers[guild_id].voice_client:
+                try:
+                    vc = await message.author.voice.channel.connect()
+                    if guild_id not in radio_servers:
+                        radio_servers[guild_id] = RadioState()
+                    radio_servers[guild_id].voice_client = vc
+                    await message.channel.send(f"✅ Подключился к {message.author.voice.channel.name}")
+                except Exception as e:
+                    print(f"Ошибка подключения: {e}")
+    
+    await bot.process_commands(message)
 
 
 # Запуск бота
