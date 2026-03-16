@@ -27,6 +27,12 @@ def main():
         default=5000,
         help='Порт для веб-интерфейса (по умолчанию: 5000)'
     )
+    parser.add_argument(
+        '--host',
+        type=str,
+        default='0.0.0.0',
+        help='Хост для веб-интерфейса (по умолчанию: 0.0.0.0)'
+    )
     
     args = parser.parse_args()
     
@@ -39,15 +45,12 @@ def main():
     elif args.mode == 'web':
         print(f"🌐 Запуск веб-интерфейса на порту {args.port}...")
         from web.app import app
-        app.run(host='0.0.0.0', port=args.port, debug=True)
+        app.run(host=args.host, port=args.port, debug=True)
         
     elif args.mode == 'discord':
         print("🤖 Запуск Discord бота...")
-        from bot.main import bot
-        # Для бота нужно добавить токен в файл .env
-        from dotenv import load_dotenv
         import os
-        load_dotenv()
+        from bot.main import bot
         
         token = os.getenv('DISCORD_TOKEN')
         if not token:
