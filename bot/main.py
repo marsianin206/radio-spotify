@@ -1,4 +1,5 @@
 """Discord бот для Spotify Radio."""
+import os
 import discord
 from discord.ext import commands
 import asyncio
@@ -6,8 +7,8 @@ from spotify.client import SpotifyClient
 from audio.engine import AudioEngine
 
 
-# Настройки бота
-TOKEN = ""  # Токен бота Discord
+# Настройки бота - читаем из переменных окружения
+TOKEN = os.environ.get("DISCORD_TOKEN") or os.getenv("DISCORD_TOKEN", "")
 BOT_PREFIX = "!"
 
 # Инициализация
